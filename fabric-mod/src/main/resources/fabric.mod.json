@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "carbon",
+  "version": "${version}",
+  "name": "Carbon NPU Acceleration",
+  "description": "VibeCoding Minecraft NPU 异构算力加速模组 - 通过 PC 端 NPU 分流计算负载，提升帧率降低卡顿",
+  "authors": [
+    "VibeCoding Team"
+  ],
+  "contact": {
+    "homepage": "https://vibecoding.com/",
+    "sources": ""
+  },
+  "license": "MIT",
+  "icon": "assets/carbon/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.vibecoding.carbon.CarbonMod"
+    ],
+    "modmenu": [
+      "com.vibecoding.carbon.config.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "carbon.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric": "*",
+    "minecraft": "1.20.x",
+    "java": ">=17"
+  },
+  "suggests": {
+    "sodium": "*",
+    "iris": "*"
+  }
+}

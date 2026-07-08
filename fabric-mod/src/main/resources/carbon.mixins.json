@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.vibecoding.carbon.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "ChunkBuilderMixin",
+    "LightmapMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
