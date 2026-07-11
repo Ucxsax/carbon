@@ -1,0 +1,31 @@
+Microsoft (R) COFF/PE Dumper Version 14.44.35228.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file E:\Carbon\carbon\third_party\onnxruntime\bin\onnxruntime.dll
+
+File Type: DLL
+
+  Section contains the following exports for onnxruntime.dll
+
+    00000000 characteristics
+    FFFFFFFF time date stamp
+        0.00 version
+           1 ordinal base
+           2 number of functions
+           2 number of names
+
+    ordinal hint RVA      name
+
+          1    0 0001A7B0 OrtGetApiBase
+          2    1 001C3350 OrtSessionOptionsAppendExecutionProvider_CPU
+
+  Summary
+
+       6B000 .data
+       53000 .pdata
+      2A3000 .rdata
+       10000 .reloc
+        1000 .rsrc
+      B8E000 .text
+        1000 _RDATA
