@@ -57,7 +57,7 @@ public class NPUBridge {
             String[] files = {"carbon_npu.dll", "onnxruntime.dll", "chunk_mesh_v1.onnx", "light_baking_v1.onnx"};
 
             // 版本标记：每次发版递增，强制覆盖旧文件
-            String versionMarker = "v0.1.1";
+            String versionMarker = "v0.2.0";
             Path versionFile = targetDir.resolve(".carbon_version");
             boolean needForceUpdate = true;
             if (Files.exists(versionFile)) {

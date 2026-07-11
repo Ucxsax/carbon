@@ -18,7 +18,7 @@ public:
     OrtBackend();
     ~OrtBackend() override;
 
-    BackendType GetType() const override { return BackendType::DirectML; }
+    BackendType GetType() const override { return BackendType::CPU_Fallback; }
     std::string GetName() const override { return "ONNX Runtime (CPU)"; }
     bool IsAvailable() const override;
     bool Initialize() override;

@@ -18,48 +18,52 @@ public class CarbonMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         LOGGER.info("========================================");
-        LOGGER.info("[Carbon] Carbon NPU 加速模组 v0.1.0 Alpha");
+        LOGGER.info("[Carbon] Carbon NPU Acceleration v0.2.0");
         LOGGER.info("========================================");
 
-        // 加载配置
         config = CarbonConfig.load();
-        LOGGER.info("[Carbon] 配置文件已加载");
+        LOGGER.info("[Carbon] Config loaded, backend={}", config.preferredBackend);
 
-        // 初始化 NPU 桥接层
+        npuBridge = new NPUBridge();
+        if (config.enableNPUAcceleration) {
+            if (npuBridge.initialize()) {
+                LOGGER.info("[Carbon] NPU engine initialized, backends={}", npuBridge.getActiveBackends());
+            } else {
+                LOGGER.warn("[Carbon] NPU engine init failed, running native CPU");
+            }
+        } else {
+            LOGGER.info("[Carbon] NPU acceleration disabled in config");
+        }
+
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            CarbonCommand.register(dispatcher);
+        });
+
+        LOGGER.info("[Carbon] Mod initialized");
+    }
+
+    /**
+     * Called from config screen save — restart engine with new settings
+     */
+    public static void restartEngine() {
+        if (npuBridge != null) {
+            npuBridge.shutdown();
+        }
+        config = CarbonConfig.load();
         if (config.enableNPUAcceleration) {
             npuBridge = new NPUBridge();
             if (npuBridge.initialize()) {
-                LOGGER.info("[Carbon] NPU 加速引擎初始化成功");
-                LOGGER.info("[Carbon] 活跃后端: {}", npuBridge.getActiveBackends());
-                LOGGER.info("[Carbon] 平均占用率: {}%", String.format("%.1f", npuBridge.getAverageUtilization() * 100));
+                LOGGER.info("[Carbon] Engine restarted, backends={}", npuBridge.getActiveBackends());
             } else {
-                LOGGER.warn("[Carbon] NPU 加速引擎初始化失败，降级为原生 CPU 计算");
-                LOGGER.warn("[Carbon] 请确保 carbon_npu.dll 位于系统库路径或模组目录下");
+                LOGGER.warn("[Carbon] Engine restart failed");
             }
         } else {
-            LOGGER.info("[Carbon] NPU 加速已在配置中关闭");
-            npuBridge = new NPUBridge(); // 保留实例供命令查询
+            npuBridge = new NPUBridge();
+            LOGGER.info("[Carbon] NPU acceleration disabled");
         }
-
-        // 注册客户端命令
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            CarbonCommand.register(dispatcher);
-            LOGGER.debug("[Carbon] 客户端命令已注册: /carbon");
-        });
-
-        LOGGER.info("[Carbon] 模组初始化完成");
-        LOGGER.info("[Carbon] 输入 /carbon status 查看 NPU 状态");
     }
 
-    public static CarbonConfig getConfig() {
-        return config;
-    }
-
-    public static NPUBridge getNpuBridge() {
-        return npuBridge;
-    }
-
-    public static boolean isNPUAvailable() {
-        return npuBridge != null && npuBridge.isAvailable();
-    }
+    public static CarbonConfig getConfig() { return config; }
+    public static NPUBridge getNpuBridge() { return npuBridge; }
+    public static boolean isNPUAvailable() { return npuBridge != null && npuBridge.isAvailable(); }
 }

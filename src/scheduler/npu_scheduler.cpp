@@ -1,6 +1,7 @@
 #include "carbon/scheduler/npu_scheduler.h"
 #include "carbon/utils/logger.h"
 #include "carbon/backends/mock_backend.h"
+#include "carbon/hal/npu_backend.h"
 #include <chrono>
 
 namespace carbon {
@@ -35,11 +36,25 @@ bool NPUScheduler::Initialize(const SchedulerConfig& config) {
     
     running_ = true;
     
-    // 默认注册Mock后端（测试用）
-    // 实际Windows环境会注册对应硬件后端
-    auto mock_backend = std::make_unique<MockBackend>();
-    if (mock_backend->Initialize()) {
-        RegisterBackend(std::move(mock_backend));
+    // 自动检测可用后端，按优先级注册
+    auto available = BackendFactory::GetAvailableBackends();
+    bool registered_any = false;
+    
+    for (auto type : available) {
+        auto backend = BackendFactory::CreateBackend(type);
+        if (backend) {
+            RegisterBackend(std::move(backend));
+            registered_any = true;
+        }
+    }
+    
+    // 兜底：如果没有任何后端可用，注册 Mock
+    if (!registered_any) {
+        CARBON_LOG_WARN("No real backends available, falling back to MockBackend");
+        auto mock_backend = std::make_unique<MockBackend>();
+        if (mock_backend->Initialize()) {
+            RegisterBackend(std::move(mock_backend));
+        }
     }
     
     CARBON_LOG_INFO("NPU Scheduler initialized with " + 

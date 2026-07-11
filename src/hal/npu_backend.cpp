@@ -48,17 +48,17 @@ std::unique_ptr<NPUBackend> BackendFactory::CreateBackend(BackendType type) {
 std::vector<BackendType> BackendFactory::GetAvailableBackends() {
     std::vector<BackendType> backends;
     
-    // Mock 后端总是可用
-    backends.push_back(BackendType::Mock);
-    
-    // OrtBackend 总是可用 (CPU EP is built into onnxruntime.dll)
+    // OrtBackend (CPU EP) — 总是优先
     {
         auto backend = std::make_unique<OrtBackend>();
         if (backend->IsAvailable()) {
-            backends.push_back(BackendType::DirectML);
-            CARBON_LOG_INFO("ONNX Runtime backend available (CPU)");
+            backends.push_back(BackendType::CPU_Fallback);
+            CARBON_LOG_INFO("ONNX Runtime backend available (CPU EP)");
         }
     }
+    
+    // Mock 后端 — 仅在没有真实后端时作为兜底
+    // backends.push_back(BackendType::Mock);
     
     return backends;
 }
