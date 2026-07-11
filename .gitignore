@@ -29,6 +29,8 @@ build/
 *.so
 *.dll
 *.dylib
+# But allow native resources bundled in the mod
+!fabric-mod/src/main/resources/native/
 
 # Logs
 *.log

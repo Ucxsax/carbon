@@ -46,6 +46,13 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
+    // 不要混淆/重映射 DLL 和 ONNX 文件
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// remapJar 时保留 native 资源不被混淆
+tasks.named("remapJar") {
+    dependsOn jar
 }
 
 publishing {
