@@ -1,6 +1,6 @@
 # Carbon - Minecraft NPU 加速模块
 
-VibeCoding 配套 PC 端 Minecraft NPU 异构算力加速模组。通过调用 PC 端硬件 NPU 分流、分担 Minecraft 原有 CPU、GPU 计算负载。
+PC 端 Minecraft NPU 异构算力加速模组。通过调用 PC 端硬件 NPU 分流、分担 Minecraft 原有 CPU、GPU 计算负载。
 
 ## 项目结构
 
