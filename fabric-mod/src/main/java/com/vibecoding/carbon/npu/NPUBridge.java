@@ -56,6 +56,19 @@ public class NPUBridge {
 
             String[] files = {"carbon_npu.dll", "onnxruntime.dll", "chunk_mesh_v1.onnx", "light_baking_v1.onnx"};
 
+            // 版本标记：每次发版递增，强制覆盖旧文件
+            String versionMarker = "v0.1.1";
+            Path versionFile = targetDir.resolve(".carbon_version");
+            boolean needForceUpdate = true;
+            if (Files.exists(versionFile)) {
+                try {
+                    String existing = Files.readString(versionFile).trim();
+                    needForceUpdate = !existing.equals(versionMarker);
+                } catch (Exception e) {
+                    needForceUpdate = true;
+                }
+            }
+
             for (String fileName : files) {
                 Path target = targetDir.resolve(fileName);
                 String resourcePath = "/native/win-x64/" + fileName;
@@ -70,7 +83,7 @@ public class NPUBridge {
                 byte[] data = is.readAllBytes();
                 is.close();
 
-                if (Files.exists(target) && Files.size(target) == data.length) {
+                if (!needForceUpdate && Files.exists(target) && Files.size(target) == data.length) {
                     CarbonMod.LOGGER.debug("[Carbon] 资源已存在，跳过: {}", fileName);
                     continue;
                 }
@@ -78,6 +91,9 @@ public class NPUBridge {
                 Files.write(target, data);
                 CarbonMod.LOGGER.info("[Carbon] 已释放: {} ({} bytes)", fileName, data.length);
             }
+
+            Files.writeString(versionFile, versionMarker);
+            CarbonMod.LOGGER.info("[Carbon] 版本标记已更新: {}", versionMarker);
 
             return targetDir;
         } catch (Exception e) {
