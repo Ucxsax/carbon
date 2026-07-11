@@ -3,6 +3,7 @@
 #include "carbon/backends/openvino_backend.h"
 #include "carbon/backends/directml_backend.h"
 #include "carbon/backends/tensorrt_backend.h"
+#include "carbon/backends/ort_backend.h"
 #include "carbon/utils/logger.h"
 
 namespace carbon {
@@ -24,12 +25,11 @@ std::unique_ptr<NPUBackend> BackendFactory::CreateBackend(BackendType type) {
             break;
             
         case BackendType::DirectML:
-            backend = std::make_unique<DirectMLBackend>();
+            backend = std::make_unique<OrtBackend>();
             break;
             
         case BackendType::CPU_Fallback:
-            CARBON_LOG_WARN("CPU fallback not implemented, using Mock backend");
-            backend = std::make_unique<MockBackend>();
+            backend = std::make_unique<OrtBackend>();
             break;
             
         default:
@@ -51,38 +51,14 @@ std::vector<BackendType> BackendFactory::GetAvailableBackends() {
     // Mock 后端总是可用
     backends.push_back(BackendType::Mock);
     
-    // 检测 OpenVINO (Intel NPU)
-#ifdef CARBON_USE_OPENVINO
+    // OrtBackend 总是可用 (CPU EP is built into onnxruntime.dll)
     {
-        auto backend = std::make_unique<OpenVINOBackend>();
-        if (backend->IsAvailable()) {
-            backends.push_back(BackendType::OpenVINO);
-            CARBON_LOG_INFO("Intel NPU detected via OpenVINO");
-        }
-    }
-#endif
-    
-    // 检测 TensorRT (NVIDIA)
-#ifdef CARBON_USE_TENSORRT
-    {
-        auto backend = std::make_unique<TensorRTBackend>();
-        if (backend->IsAvailable()) {
-            backends.push_back(BackendType::TensorRT);
-            CARBON_LOG_INFO("NVIDIA Tensor Core detected via TensorRT");
-        }
-    }
-#endif
-    
-    // 检测 DirectML (AMD/Generic Windows)
-#ifdef CARBON_USE_DIRECTML
-    {
-        auto backend = std::make_unique<DirectMLBackend>();
+        auto backend = std::make_unique<OrtBackend>();
         if (backend->IsAvailable()) {
             backends.push_back(BackendType::DirectML);
-            CARBON_LOG_INFO("DirectML backend detected");
+            CARBON_LOG_INFO("ONNX Runtime backend available (CPU)");
         }
     }
-#endif
     
     return backends;
 }

@@ -10,6 +10,11 @@
 #include "carbon/compute/light_bake_processor.h"
 #include "carbon/common_types.h"
 
+// JNI_VERSION_17 may not be defined in older jni.h
+#ifndef JNI_VERSION_17
+#define JNI_VERSION_17 0x00110000
+#endif
+
 using namespace carbon;
 
 // 全局 JVM 引用（用于回调时 AttachCurrentThread）
@@ -229,11 +234,12 @@ JNIEXPORT jboolean JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeInitia
         if (!backends.empty()) {
             auto backend = BackendFactory::CreateBackend(backends[0]);
             if (backend) {
+                std::shared_ptr<NPUBackend> shared_backend(std::move(backend));
                 g_chunk_processor = std::make_shared<ChunkMeshProcessor>();
-                g_chunk_processor->Initialize(backend);
+                g_chunk_processor->Initialize(shared_backend);
                 
                 g_light_processor = std::make_shared<LightBakeProcessor>();
-                g_light_processor->Initialize(backend);
+                g_light_processor->Initialize(shared_backend);
             }
         }
         
@@ -330,7 +336,7 @@ JNIEXPORT jlong JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeSubmitChu
     jint* data = env->GetIntArrayElements(blockData, nullptr);
     
     TensorDesc input;
-    input.data_type = DataType::Int32;
+    input.data_type = TensorDesc::DataType::Int32;
     input.shape = {16, 256, 16};
     input.data = data;
     input.size_bytes = len * sizeof(jint);
@@ -363,7 +369,7 @@ JNIEXPORT jlong JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeSubmitLig
     jsize sky_len = env->GetArrayLength(skyLight);
     jbyte* sky_data = env->GetByteArrayElements(skyLight, nullptr);
     TensorDesc sky_input;
-    sky_input.data_type = DataType::UInt8;
+    sky_input.data_type = TensorDesc::DataType::UInt8;
     sky_input.shape = {16, 256, 16};
     sky_input.data = sky_data;
     sky_input.size_bytes = sky_len;
@@ -372,7 +378,7 @@ JNIEXPORT jlong JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeSubmitLig
     jsize block_len = env->GetArrayLength(blockLight);
     jbyte* block_data = env->GetByteArrayElements(blockLight, nullptr);
     TensorDesc block_input;
-    block_input.data_type = DataType::UInt8;
+    block_input.data_type = TensorDesc::DataType::UInt8;
     block_input.shape = {16, 256, 16};
     block_input.data = block_data;
     block_input.size_bytes = block_len;

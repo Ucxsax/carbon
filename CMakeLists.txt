@@ -30,6 +30,7 @@ set(CARBON_SOURCES
     src/backends/openvino_backend.cpp
     src/backends/directml_backend.cpp
     src/backends/tensorrt_backend.cpp
+    src/backends/ort_backend.cpp
     src/compute/chunk_mesh_processor.cpp
     src/compute/light_bake_processor.cpp
     src/utils/logger.cpp

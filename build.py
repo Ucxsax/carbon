@@ -7,6 +7,9 @@ build_dir = os.path.join(project_dir, 'build')
 os.makedirs(build_dir, exist_ok=True)
 
 include_dir = os.path.join(project_dir, 'include')
+winsdk_base = r'D:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0'
+winsdk_um = os.path.join(winsdk_base, 'um')
+winsdk_shared = os.path.join(winsdk_base, 'shared')
 
 # Source files
 sources = [
@@ -17,6 +20,7 @@ sources = [
     r'src\backends\openvino_backend.cpp',
     r'src\backends\directml_backend.cpp',
     r'src\backends\tensorrt_backend.cpp',
+    r'src\backends\ort_backend.cpp',
     r'src\compute\chunk_mesh_processor.cpp',
     r'src\compute\light_bake_processor.cpp',
     r'src\scheduler\npu_scheduler.cpp',
@@ -38,7 +42,7 @@ for src in sources:
     basename = os.path.basename(src).replace('.cpp', '.obj')
     obj_path = os.path.join(build_dir, basename)
     lines.append(f'echo Compiling {src}...')
-    lines.append(f'cl.exe /std:c++20 /EHsc /W4 /utf-8 /I "{include_dir}" /c "{src_path}" /Fo:"{obj_path}" 2>&1')
+    lines.append(f'cl.exe /std:c++20 /EHsc /W4 /utf-8 /D CARBON_PLATFORM_WINDOWS /I "{include_dir}" /I "{winsdk_um}" /I "{winsdk_shared}" /c "{src_path}" /Fo:"{obj_path}" 2>&1')
     lines.append('if %errorlevel% neq 0 echo FAILED: ' + src)
     lines.append('')
 
