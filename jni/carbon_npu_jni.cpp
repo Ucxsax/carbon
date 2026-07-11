@@ -10,9 +10,9 @@
 #include "carbon/compute/light_bake_processor.h"
 #include "carbon/common_types.h"
 
-// JNI_VERSION_17 may not be defined in older jni.h
-#ifndef JNI_VERSION_17
-#define JNI_VERSION_17 0x00110000
+// JNI_VERSION_1_8 is universally supported across all Java versions
+#ifndef JNI_VERSION_1_8
+#define JNI_VERSION_1_8 0x00010008
 #endif
 
 using namespace carbon;
@@ -47,7 +47,7 @@ static bool g_callback_thread_running = false;
 // 回调线程函数 - 将回调分发到 MC 主线程
 static void CallbackDispatcherThread() {
     JNIEnv* env = nullptr;
-    if (g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_17) != JNI_OK) {
+    if (g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_8) != JNI_OK) {
         if (g_jvm->AttachCurrentThread(reinterpret_cast<void**>(&env), nullptr) != JNI_OK) {
             return;
         }
@@ -158,13 +158,13 @@ static void LightBakeCallback(uint64_t task_id, const TaskResult& result) {
 // JNI_OnLoad - 库加载时调用
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     g_jvm = vm;
-    return JNI_VERSION_17;
+    return JNI_VERSION_1_8;
 }
 
 // 辅助：获取当前线程的 JNIEnv
 static JNIEnv* GetJNIEnv() {
     JNIEnv* env = nullptr;
-    if (g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_17) != JNI_OK) {
+    if (g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_8) != JNI_OK) {
         if (g_jvm->AttachCurrentThread(reinterpret_cast<void**>(&env), nullptr) != JNI_OK) {
             return nullptr;
         }
