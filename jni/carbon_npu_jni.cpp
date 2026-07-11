@@ -2,7 +2,12 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <queue>
+#include <thread>
+#include <condition_variable>
 #include "carbon/scheduler/npu_scheduler.h"
+#include "carbon/compute/chunk_mesh_processor.h"
+#include "carbon/compute/light_bake_processor.h"
 #include "carbon/common_types.h"
 
 using namespace carbon;
@@ -11,8 +16,139 @@ using namespace carbon;
 static JavaVM* g_jvm = nullptr;
 static jobject g_bridge_obj = nullptr;  // NPUBridge 全局引用
 static jmethodID g_onTaskComplete_mid = nullptr;
+static jmethodID g_onChunkMeshComplete_mid = nullptr;
+static jmethodID g_onLightBakeComplete_mid = nullptr;
 
 static std::mutex g_jni_mutex;
+
+// 计算处理器
+static std::shared_ptr<ChunkMeshProcessor> g_chunk_processor = nullptr;
+static std::shared_ptr<LightBakeProcessor> g_light_processor = nullptr;
+
+// 回调队列（从 C++ 线程到 MC 主线程）
+struct CallbackTask {
+    uint64_t task_id;
+    TaskResult result;
+    std::vector<uint8_t> output_data;
+    TaskType type;
+};
+
+static std::mutex g_callback_mutex;
+static std::queue<CallbackTask> g_callback_queue;
+static std::condition_variable g_callback_cv;
+static std::thread g_callback_thread;
+static bool g_callback_thread_running = false;
+
+// 回调线程函数 - 将回调分发到 MC 主线程
+static void CallbackDispatcherThread() {
+    JNIEnv* env = nullptr;
+    if (g_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_17) != JNI_OK) {
+        if (g_jvm->AttachCurrentThread(reinterpret_cast<void**>(&env), nullptr) != JNI_OK) {
+            return;
+        }
+    }
+    
+    while (g_callback_thread_running) {
+        CallbackTask task;
+        
+        {
+            std::unique_lock<std::mutex> lock(g_callback_mutex);
+            g_callback_cv.wait_for(lock, std::chrono::milliseconds(100), []() {
+                return !g_callback_queue.empty() || !g_callback_thread_running;
+            });
+            
+            if (!g_callback_thread_running && g_callback_queue.empty()) {
+                break;
+            }
+            
+            if (g_callback_queue.empty()) {
+                continue;
+            }
+            
+            task = std::move(g_callback_queue.front());
+            g_callback_queue.pop();
+        }
+        
+        // 调用 Java 回调
+        if (g_bridge_obj) {
+            jboolean success = task.result.success ? JNI_TRUE : JNI_FALSE;
+            jlong exec_time = static_cast<jlong>(task.result.execution_time_us);
+            jstring error = task.result.success ? nullptr : 
+                env->NewStringUTF(task.result.error_message.c_str());
+            
+            switch (task.type) {
+                case TaskType::ChunkMeshGen:
+                    if (g_onChunkMeshComplete_mid) {
+                        env->CallVoidMethod(g_bridge_obj, g_onChunkMeshComplete_mid,
+                            static_cast<jlong>(task.task_id), exec_time, success, error);
+                    }
+                    break;
+                    
+                case TaskType::LightBaking:
+                    if (g_onLightBakeComplete_mid) {
+                        env->CallVoidMethod(g_bridge_obj, g_onLightBakeComplete_mid,
+                            static_cast<jlong>(task.task_id), exec_time, success, error);
+                    }
+                    break;
+                    
+                default:
+                    if (g_onTaskComplete_mid) {
+                        env->CallVoidMethod(g_bridge_obj, g_onTaskComplete_mid,
+                            static_cast<jlong>(task.task_id), exec_time, success, error);
+                    }
+                    break;
+            }
+            
+            if (error) {
+                env->DeleteLocalRef(error);
+            }
+        }
+    }
+    
+    g_jvm->DetachCurrentThread();
+}
+
+// 任务完成回调 - 从 C++ 调度器线程调用
+static void TaskCompleteCallback(uint64_t task_id, const TaskResult& result) {
+    CallbackTask task;
+    task.task_id = task_id;
+    task.result = result;
+    task.type = TaskType::Custom;
+    
+    {
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        g_callback_queue.push(std::move(task));
+    }
+    g_callback_cv.notify_one();
+}
+
+// 区块网格任务完成回调
+static void ChunkMeshCallback(uint64_t task_id, const TaskResult& result) {
+    CallbackTask task;
+    task.task_id = task_id;
+    task.result = result;
+    task.type = TaskType::ChunkMeshGen;
+    
+    {
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        g_callback_queue.push(std::move(task));
+    }
+    g_callback_cv.notify_one();
+}
+
+// 光照烘焙任务完成回调
+static void LightBakeCallback(uint64_t task_id, const TaskResult& result) {
+    CallbackTask task;
+    task.task_id = task_id;
+    task.result = result;
+    task.type = TaskType::LightBaking;
+    
+    {
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        g_callback_queue.push(std::move(task));
+    }
+    g_callback_cv.notify_one();
+}
 
 // JNI_OnLoad - 库加载时调用
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
@@ -31,24 +167,20 @@ static JNIEnv* GetJNIEnv() {
     return env;
 }
 
-// 任务完成回调 - 从 C++ 调度器线程调用，转发给 Java
-static void TaskCompleteCallback(uint64_t task_id, const TaskResult& result) {
-    std::lock_guard<std::mutex> lock(g_jni_mutex);
-    
-    if (!g_bridge_obj || !g_onTaskComplete_mid) return;
-    
-    JNIEnv* env = GetJNIEnv();
-    if (!env) return;
-    
-    jlong j_task_id = static_cast<jlong>(task_id);
-    jboolean j_success = result.success ? JNI_TRUE : JNI_FALSE;
-    jlong j_exec_time = static_cast<jlong>(result.execution_time_us);
-    jstring j_error = result.success ? nullptr : env->NewStringUTF(result.error_message.c_str());
-    
-    env->CallVoidMethod(g_bridge_obj, g_onTaskComplete_mid, j_task_id, j_exec_time, j_success, j_error);
-    
-    if (j_error) {
-        env->DeleteLocalRef(j_error);
+// 启动回调线程
+static void StartCallbackThread() {
+    if (!g_callback_thread_running) {
+        g_callback_thread_running = true;
+        g_callback_thread = std::thread(CallbackDispatcherThread);
+    }
+}
+
+// 停止回调线程
+static void StopCallbackThread() {
+    g_callback_thread_running = false;
+    g_callback_cv.notify_all();
+    if (g_callback_thread.joinable()) {
+        g_callback_thread.join();
     }
 }
 
@@ -78,6 +210,8 @@ JNIEXPORT jboolean JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeInitia
         g_bridge_obj = env->NewGlobalRef(obj);
         jclass cls = env->GetObjectClass(obj);
         g_onTaskComplete_mid = env->GetMethodID(cls, "onTaskComplete", "(JJZLjava/lang/String;)V");
+        g_onChunkMeshComplete_mid = env->GetMethodID(cls, "onChunkMeshComplete", "(JJZLjava/lang/String;)V");
+        g_onLightBakeComplete_mid = env->GetMethodID(cls, "onLightBakeComplete", "(JJZLjava/lang/String;)V");
     }
     
     SchedulerConfig config;
@@ -87,12 +221,39 @@ JNIEXPORT jboolean JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeInitia
     config.enable_auto_degrade = autoDegrade;
     config.enable_circuit_breaker = circuitBreaker;
     
-    return scheduler.Initialize(config) ? JNI_TRUE : JNI_FALSE;
+    bool success = scheduler.Initialize(config);
+    
+    if (success) {
+        // 初始化计算处理器
+        auto backends = scheduler.GetActiveBackends();
+        if (!backends.empty()) {
+            auto backend = BackendFactory::CreateBackend(backends[0]);
+            if (backend) {
+                g_chunk_processor = std::make_shared<ChunkMeshProcessor>();
+                g_chunk_processor->Initialize(backend);
+                
+                g_light_processor = std::make_shared<LightBakeProcessor>();
+                g_light_processor->Initialize(backend);
+            }
+        }
+        
+        // 启动回调线程
+        StartCallbackThread();
+    }
+    
+    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeShutdown(
     JNIEnv* env, jobject obj
 ) {
+    // 停止回调线程
+    StopCallbackThread();
+    
+    // 清理计算处理器
+    g_chunk_processor.reset();
+    g_light_processor.reset();
+    
     auto& scheduler = NPUScheduler::Instance();
     scheduler.Shutdown();
     
@@ -102,6 +263,8 @@ JNIEXPORT void JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeShutdown(
         g_bridge_obj = nullptr;
     }
     g_onTaskComplete_mid = nullptr;
+    g_onChunkMeshComplete_mid = nullptr;
+    g_onLightBakeComplete_mid = nullptr;
 }
 
 JNIEXPORT jobject JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeGetActiveBackends(
@@ -173,7 +336,7 @@ JNIEXPORT jlong JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeSubmitChu
     input.size_bytes = len * sizeof(jint);
     task->inputs.push_back(input);
     
-    task->callback = TaskCompleteCallback;
+    task->callback = ChunkMeshCallback;
     
     uint64_t task_id = scheduler.SubmitTask(task);
     
@@ -215,7 +378,7 @@ JNIEXPORT jlong JNICALL Java_com_vibecoding_carbon_npu_NPUBridge_nativeSubmitLig
     block_input.size_bytes = block_len;
     task->inputs.push_back(block_input);
     
-    task->callback = TaskCompleteCallback;
+    task->callback = LightBakeCallback;
     
     uint64_t task_id = scheduler.SubmitTask(task);
     

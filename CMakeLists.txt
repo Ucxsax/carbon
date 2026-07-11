@@ -27,6 +27,11 @@ set(CARBON_SOURCES
     src/scheduler/npu_scheduler.cpp
     src/hal/npu_backend.cpp
     src/backends/mock_backend.cpp
+    src/backends/openvino_backend.cpp
+    src/backends/directml_backend.cpp
+    src/backends/tensorrt_backend.cpp
+    src/compute/chunk_mesh_processor.cpp
+    src/compute/light_bake_processor.cpp
     src/utils/logger.cpp
 )
 
@@ -39,6 +44,28 @@ if(WIN32)
     target_compile_definitions(carbon PRIVATE CARBON_PLATFORM_WINDOWS)
 elseif(UNIX)
     target_compile_definitions(carbon PRIVATE CARBON_PLATFORM_LINUX)
+endif()
+
+# OpenVINO 后端
+if(CARBON_USE_OPENVINO)
+    target_compile_definitions(carbon PRIVATE CARBON_USE_OPENVINO)
+    # find_package(OpenVINO REQUIRED)
+    # target_link_libraries(carbon PUBLIC openvino::runtime)
+endif()
+
+# TensorRT 后端
+if(CARBON_USE_TENSORRT)
+    target_compile_definitions(carbon PRIVATE CARBON_USE_TENSORRT)
+    # find_package(CUDA REQUIRED)
+    # target_include_directories(carbon PRIVATE ${CUDA_INCLUDE_DIRS})
+    # target_link_libraries(carbon PUBLIC nvinfer cuda)
+endif()
+
+# DirectML 后端
+if(CARBON_USE_DIRECTML)
+    target_compile_definitions(carbon PRIVATE CARBON_USE_DIRECTML)
+    # 链接 DirectML 和 D3D12
+    # target_link_libraries(carbon PUBLIC d3d12 dxgi directml)
 endif()
 
 # 测试

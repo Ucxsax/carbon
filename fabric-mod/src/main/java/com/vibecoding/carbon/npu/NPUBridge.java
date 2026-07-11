@@ -107,8 +107,7 @@ public class NPUBridge {
     }
 
     /**
-     * JNI 回调入口 - C++ 端任务完成后调用此方法
-     * 注意：此方法在 C++ 工作线程中调用，不是 MC 主线程
+     * JNI 回调入口 - 通用任务完成
      */
     public void onTaskComplete(long taskId, long executionTimeUs, boolean success, String errorMessage) {
         BiConsumer<Boolean, Long> callback = taskCallbacks.remove(taskId);
@@ -122,6 +121,46 @@ public class NPUBridge {
 
         if (!success) {
             CarbonMod.LOGGER.warn("[Carbon] NPU 任务失败: taskId={}, error={}", taskId, errorMessage);
+        }
+    }
+
+    /**
+     * JNI 回调入口 - 区块网格生成完成
+     */
+    public void onChunkMeshComplete(long taskId, long executionTimeUs, boolean success, String errorMessage) {
+        BiConsumer<Boolean, Long> callback = taskCallbacks.remove(taskId);
+        if (callback != null) {
+            try {
+                callback.accept(success, executionTimeUs);
+            } catch (Exception e) {
+                CarbonMod.LOGGER.error("[Carbon] 区块网格任务回调异常: taskId={}", taskId, e);
+            }
+        }
+
+        if (success) {
+            CarbonMod.LOGGER.debug("[Carbon] 区块网格 NPU 计算完成: taskId={}, 耗时={}us", taskId, executionTimeUs);
+        } else {
+            CarbonMod.LOGGER.warn("[Carbon] 区块网格任务失败: taskId={}, error={}", taskId, errorMessage);
+        }
+    }
+
+    /**
+     * JNI 回调入口 - 光照烘焙完成
+     */
+    public void onLightBakeComplete(long taskId, long executionTimeUs, boolean success, String errorMessage) {
+        BiConsumer<Boolean, Long> callback = taskCallbacks.remove(taskId);
+        if (callback != null) {
+            try {
+                callback.accept(success, executionTimeUs);
+            } catch (Exception e) {
+                CarbonMod.LOGGER.error("[Carbon] 光照烘焙任务回调异常: taskId={}", taskId, e);
+            }
+        }
+
+        if (success) {
+            CarbonMod.LOGGER.debug("[Carbon] 光照烘焙 NPU 计算完成: taskId={}, 耗时={}us", taskId, executionTimeUs);
+        } else {
+            CarbonMod.LOGGER.warn("[Carbon] 光照烘焙任务失败: taskId={}, error={}", taskId, errorMessage);
         }
     }
 

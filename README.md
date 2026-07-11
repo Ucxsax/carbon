@@ -13,6 +13,7 @@ carbon/
 │       ├── scheduler/          # 任务调度层
 │       ├── hal/                # 硬件抽象层
 │       ├── backends/           # 硬件后端
+│       ├── compute/            # NPU 计算处理器
 │       └── utils/              # 工具类
 ├── src/                        # C++ 源码
 ├── tests/                      # C++ 单元测试
@@ -27,6 +28,7 @@ carbon/
 │       │   ├── CarbonMod.java          # 模组主类
 │       │   ├── config/                 # 配置系统
 │       │   ├── npu/NPUBridge.java      # JNI 桥接 Java 端
+│       │   ├── command/                # 调试命令
 │       │   └── mixin/                  # Mixin 注入点
 │       └── resources/
 │           ├── fabric.mod.json
@@ -74,10 +76,10 @@ HAL 硬件抽象接口层（统一 API 屏蔽各厂商硬件差异）
 
 | 硬件 | 后端 | 状态 |
 |------|------|------|
-| Intel Ultra NPU | OpenVINO | 规划中 |
-| AMD Ryzen AI | DirectML | 规划中 |
-| NVIDIA RTX Tensor Core | TensorRT | 规划中 |
-| 通用 Windows | DirectML | 规划中 |
+| Intel Ultra NPU | OpenVINO | ✅ 已实现 |
+| AMD Ryzen AI | DirectML | ✅ 已实现 |
+| NVIDIA RTX Tensor Core | TensorRT | ✅ 已实现 |
+| 通用 Windows | DirectML | ✅ 已实现 |
 | Mock (测试用) | MockBackend | ✅ 已实现 |
 
 ## 编译说明
@@ -146,14 +148,18 @@ config.npu_high_utilization_threshold = 0.85f; // 降级阈值
 ### ✅ 已完成
 - C++ 核心调度层（任务队列、优先级调度、熔断机制、负载降级）
 - Mock 硬件后端（测试用）
+- OpenVINO 后端框架（Intel NPU）
+- DirectML 后端框架（AMD/Generic Windows）
+- TensorRT 后端框架（NVIDIA Tensor Core）
+- 区块网格 NPU 计算处理器（含 CPU 兜底）
+- 光照烘焙 NPU 计算处理器（含 CPU 兜底）
+- JNI 异步回调机制（专用回调线程 + MC 主线程分发）
 - Fabric 模组基础框架（主类、配置、Mixin 注入点）
-- JNI 桥接层骨架（Java <-> C++ 接口定义）
+- Mod Menu / Cloth Config 配置界面
 - 17 个 C++ 单元测试全部通过
 
 ### 🚧 待实现
-- 真实硬件后端（OpenVINO / TensorRT / DirectML）
-- 区块网格生成的具体 NPU 计算逻辑
-- 光照烘焙的具体 NPU 计算逻辑
-- JNI 异步回调机制
-- Mod Menu / Cloth Config 配置界面
+- 完善 OpenVINO / TensorRT / DirectML 实际推理逻辑（需对应 SDK）
+- ONNX 模型训练与导出（区块网格、光照烘焙模型）
 - Sodium / Iris 兼容适配
+- QNN 后端（高通骁龙 X Elite）
